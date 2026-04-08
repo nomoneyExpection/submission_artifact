@@ -1,0 +1,240 @@
+{
+  "codebert": {
+    "model": "codebert",
+    "mean_auc": 0.8708565645237155,
+    "std_auc": 0.11321358680537874,
+    "mean_f1": 0.5926933582699179,
+    "std_f1": 0.24330190928495715,
+    "per_attack": [
+      {
+        "held_out_attack": "code_execution",
+        "auc": 0.9950347490347491,
+        "precision": 1.0,
+        "recall": 0.5984555984555985,
+        "f1": 0.7487922705314011,
+        "test_poison_dedup": 259,
+        "test_clean": 500,
+        "train_size": 54284
+      },
+      {
+        "held_out_attack": "command_injection",
+        "auc": 0.6903846153846155,
+        "precision": 1.0,
+        "recall": 0.2923076923076923,
+        "f1": 0.4523809523809524,
+        "test_poison_dedup": 260,
+        "test_clean": 500,
+        "train_size": 54166
+      },
+      {
+        "held_out_attack": "crypto_hash",
+        "auc": 0.9986647398843931,
+        "precision": 1.0,
+        "recall": 0.7774566473988439,
+        "f1": 0.8747967479674797,
+        "test_poison_dedup": 346,
+        "test_clean": 500,
+        "train_size": 54221
+      },
+      {
+        "held_out_attack": "deserialization",
+        "auc": 0.8283091334894612,
+        "precision": 0.9895833333333334,
+        "recall": 0.4449648711943794,
+        "f1": 0.6138933764135703,
+        "test_poison_dedup": 427,
+        "test_clean": 500,
+        "train_size": 54141
+      },
+      {
+        "held_out_attack": "file_operations",
+        "auc": 0.9987877237851662,
+        "precision": 1.0,
+        "recall": 0.8081841432225064,
+        "f1": 0.8939179632248939,
+        "test_poison_dedup": 391,
+        "test_clean": 500,
+        "train_size": 54173
+      },
+      {
+        "held_out_attack": "jinja",
+        "auc": 0.9742129783693845,
+        "precision": 1.0,
+        "recall": 0.480865224625624,
+        "f1": 0.6494382022471911,
+        "test_poison_dedup": 601,
+        "test_clean": 500,
+        "train_size": 54053
+      },
+      {
+        "held_out_attack": "network_security",
+        "auc": 0.752972972972973,
+        "precision": 0.9852941176470589,
+        "recall": 0.1810810810810811,
+        "f1": 0.30593607305936077,
+        "test_poison_dedup": 370,
+        "test_clean": 500,
+        "train_size": 54179
+      },
+      {
+        "held_out_attack": "path_traversal",
+        "auc": 0.928797619047619,
+        "precision": 0.9929078014184397,
+        "recall": 0.8333333333333334,
+        "f1": 0.9061488673139159,
+        "test_poison_dedup": 336,
+        "test_clean": 500,
+        "train_size": 54226
+      },
+      {
+        "held_out_attack": "request_get",
+        "auc": 0.862510989010989,
+        "precision": 1.0,
+        "recall": 0.22527472527472528,
+        "f1": 0.36771300448430494,
+        "test_poison_dedup": 364,
+        "test_clean": 500,
+        "train_size": 54358
+      },
+      {
+        "held_out_attack": "socket_socket",
+        "auc": 0.6972296819787986,
+        "precision": 1.0,
+        "recall": 0.07773851590106007,
+        "f1": 0.1442622950819672,
+        "test_poison_dedup": 283,
+        "test_clean": 500,
+        "train_size": 54437
+      },
+      {
+        "held_out_attack": "sql_injection",
+        "auc": 0.852517006802721,
+        "precision": 1.0,
+        "recall": 0.391156462585034,
+        "f1": 0.5623471882640587,
+        "test_poison_dedup": 294,
+        "test_clean": 500,
+        "train_size": 54257
+      }
+    ]
+  },
+  "graphcodebert": {
+    "model": "graphcodebert",
+    "mean_auc": 0.8837845867394953,
+    "std_auc": 0.10043674766931891,
+    "mean_f1": 0.5930082278765187,
+    "std_f1": 0.2584857148054308,
+    "per_attack": [
+      {
+        "held_out_attack": "code_execution",
+        "auc": 0.993891891891892,
+        "precision": 1.0,
+        "recall": 0.803088803088803,
+        "f1": 0.8907922912205567,
+        "test_poison_dedup": 259,
+        "test_clean": 500,
+        "train_size": 54284
+      },
+      {
+        "held_out_attack": "command_injection",
+        "auc": 0.7049000000000001,
+        "precision": 1.0,
+        "recall": 0.3,
+        "f1": 0.4615384615384615,
+        "test_poison_dedup": 260,
+        "test_clean": 500,
+        "train_size": 54166
+      },
+      {
+        "held_out_attack": "crypto_hash",
+        "auc": 0.9980809248554913,
+        "precision": 1.0,
+        "recall": 0.6791907514450867,
+        "f1": 0.8089500860585197,
+        "test_poison_dedup": 346,
+        "test_clean": 500,
+        "train_size": 54221
+      },
+      {
+        "held_out_attack": "deserialization",
+        "auc": 0.8486978922716628,
+        "precision": 0.9901960784313726,
+        "recall": 0.47306791569086654,
+        "f1": 0.6402535657686212,
+        "test_poison_dedup": 427,
+        "test_clean": 500,
+        "train_size": 54141
+      },
+      {
+        "held_out_attack": "file_operations",
+        "auc": 0.9969872122762149,
+        "precision": 1.0,
+        "recall": 0.8516624040920716,
+        "f1": 0.919889502762431,
+        "test_poison_dedup": 391,
+        "test_clean": 500,
+        "train_size": 54173
+      },
+      {
+        "held_out_attack": "jinja",
+        "auc": 0.9711747088186357,
+        "precision": 1.0,
+        "recall": 0.4925124792013311,
+        "f1": 0.6599777034559643,
+        "test_poison_dedup": 601,
+        "test_clean": 500,
+        "train_size": 54053
+      },
+      {
+        "held_out_attack": "network_security",
+        "auc": 0.7538108108108108,
+        "precision": 1.0,
+        "recall": 0.16216216216216217,
+        "f1": 0.27906976744186046,
+        "test_poison_dedup": 370,
+        "test_clean": 500,
+        "train_size": 54179
+      },
+      {
+        "held_out_attack": "path_traversal",
+        "auc": 0.9205178571428572,
+        "precision": 0.9923954372623575,
+        "recall": 0.7767857142857143,
+        "f1": 0.8714524207011687,
+        "test_poison_dedup": 336,
+        "test_clean": 500,
+        "train_size": 54226
+      },
+      {
+        "held_out_attack": "request_get",
+        "auc": 0.92089010989011,
+        "precision": 1.0,
+        "recall": 0.2032967032967033,
+        "f1": 0.33789954337899547,
+        "test_poison_dedup": 364,
+        "test_clean": 500,
+        "train_size": 54358
+      },
+      {
+        "held_out_attack": "socket_socket",
+        "auc": 0.7908763250883393,
+        "precision": 1.0,
+        "recall": 0.0636042402826855,
+        "f1": 0.11960132890365448,
+        "test_poison_dedup": 283,
+        "test_clean": 500,
+        "train_size": 54437
+      },
+      {
+        "held_out_attack": "sql_injection",
+        "auc": 0.8218027210884353,
+        "precision": 1.0,
+        "recall": 0.36394557823129253,
+        "f1": 0.5336658354114713,
+        "test_poison_dedup": 294,
+        "test_clean": 500,
+        "train_size": 54257
+      }
+    ]
+  }
+}
