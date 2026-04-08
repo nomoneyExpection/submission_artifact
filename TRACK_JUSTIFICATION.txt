@@ -1,0 +1,11 @@
+Track: Security and Privacy of Machine Learning
+
+Track Justification:
+
+This paper studies defensive detection of backdoor attacks in code generation
+models under a true leave-one-attack-out protocol. The core contribution is an
+ML-security evaluation of which detection signals transfer across unseen attack
+families, together with practical findings on feature design and calibration
+under attack-family shift. The work directly addresses the security of machine
+learning systems deployed for code generation, making it a natural fit for the
+Security and Privacy of Machine Learning track.
