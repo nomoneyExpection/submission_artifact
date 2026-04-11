@@ -10,7 +10,7 @@ experimental claims in the paper:
 - true 11-fold leave-one-attack-out MoEFusion
 - true 11-fold leave-one-attack-out nested heterogeneous ensemble
 - true 11-fold leave-one-attack-out CodeBERT and GraphCodeBERT baselines
-- controlled backdoor-vs-vulnerability comparison
+- auxiliary fixed-split backdoor-vs-vulnerability comparison
 
 ## Repository Layout
 
@@ -39,8 +39,8 @@ evaluation_results/
   backdoor_vs_vuln_results.json
 paper_latex/
   main_ccs2026.tex
+  refs.bib
   figures/latency_auc_pareto.pdf
-TRACK_JUSTIFICATION.txt
 ```
 
 ## Environment
@@ -82,6 +82,11 @@ For each fold:
 
 This is the protocol used for the main claims in the paper.
 
+The only exception is `scripts/eval/backdoor_vs_vuln_detection.py`, which
+reproduces the auxiliary fixed-split comparison reported in Table 3. It uses
+the original `detector_train.json` and `detector_val.json` partition and is
+not part of the primary LOAO evaluation bundle.
+
 ## Reproducing the Paper Results
 
 ```bash
@@ -100,7 +105,7 @@ python scripts/eval/true_loao_hetero_nested.py
 #   models/graphcodebert-base/
 python scripts/eval/codebert_baseline.py
 
-# Table 3: backdoor detection vs vulnerability detection
+# Table 3: auxiliary fixed-split backdoor-vs-vulnerability comparison
 python scripts/eval/backdoor_vs_vuln_detection.py
 ```
 
@@ -123,6 +128,8 @@ the experiments by inspecting:
 
 - This artifact is intentionally minimal and excludes logs, caches, and
   development-only files.
-- Auxiliary fixed-split analyses discussed in the paper are not needed to
-  reproduce the primary true-LOAO claims and are therefore not part of the
-  main evaluation bundle.
+- The primary results in the paper come from the true-LOAO scripts above.
+- The backdoor-vs-vulnerability comparison is included for completeness as an
+  auxiliary fixed-split reference experiment.
+- The paper source in `paper_latex/` is included as source only; build outputs
+  are intentionally excluded from the submission bundle.

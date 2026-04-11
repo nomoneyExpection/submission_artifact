@@ -48,8 +48,9 @@ We study this problem under a true \textbf{11-fold leave-one-attack-out}
 protocol over all 11 CodeBreaker attack families (55K samples). Our approach
 uses a \textbf{29-dimensional multi-source feature representation} spanning AST
 structure, taint propagation, token-distribution statistics, trigger-pattern
-signals, and semantic-coherence heuristics. We evaluate eight detector families
-on the same protocol --- including fine-tuned CodeBERT and GraphCodeBERT --- and
+signals, and semantic-coherence heuristics. We evaluate multiple detector
+families on the same protocol --- including fine-tuned CodeBERT and
+GraphCodeBERT --- and
 use \textbf{\sys{}}, a lightweight mixture-of-experts model, as an
 interpretable probe of which feature groups matter for each sample.
 
@@ -58,9 +59,9 @@ than model complexity}. Under true LOAO, XGBoost on the same 29D representation
 achieves the best mean AUC (0.9503) and F1 (0.7754), outperforming fine-tuned
 GraphCodeBERT (0.8838) and CodeBERT (0.8709) by 7--8\% AUC with
 2$\times$ lower variance.
-A controlled comparison against a vulnerability detector trained on the same
-features confirms that the learned signal is backdoor-specific (AUC 0.9997 vs.\
-0.6925 for the vulnerability detector).
+An auxiliary fixed-split proxy comparison against a vulnerability detector
+trained on the same features is consistent with a backdoor-specific signal (AUC
+0.9997 vs.\ 0.6925 for the vulnerability detector).
 An auxiliary leave-one-group-out
 analysis shows that statistical features carry the strongest transferable
 signal, while hand-crafted
@@ -154,8 +155,9 @@ Our contributions are:
   Under true LOAO, XGBoost on the 29D representation achieves the best mean AUC
   (0.9503) and F1 (0.7754), outperforming fine-tuned CodeBERT (0.8709) and
   GraphCodeBERT (0.8838) under the same protocol.
-  A controlled backdoor-vs-vulnerability experiment confirms that the detector
-  captures trigger--payload coupling rather than generic vulnerability patterns.
+  A controlled fixed-split proxy comparison further suggests that the detection
+  signal reflects trigger--payload coupling more than generic vulnerability
+  patterns alone.
   In auxiliary fixed-split analyses, statistical features transfer best,
   trigger-pattern heuristics hurt generalization, and calibration under attack
   shift remains a first-class failure mode.
@@ -285,8 +287,10 @@ backdoored outputs remain plausible enough to challenge purely rule-based
 inspection.
 
 The growing evidence that AI-assisted developers write less secure code while
-believing it is more secure~\cite{perry2023insecure,pearce2022copilot}
-underscores the urgency of automated detection.
+believing it is more secure~\cite{perry2023insecure}, and that a significant
+fraction of Copilot-generated code contains
+vulnerabilities~\cite{pearce2022copilot}, underscores the urgency of automated
+detection.
 
 \subsection{Backdoor Detection Methods}
 
@@ -306,8 +310,6 @@ allowing a broader analysis than a single-perplexity baseline.
 
 \textbf{STRIP}~\cite{gao2019strip} is a run-time backdoor detection technique
 that perturbs inputs and measures prediction consistency.
-STRIP4Code adapts this to code generation but requires model access and
-per-query inference, making it impractical for offline dataset inspection.
 
 \textbf{Model-internal or representation-based defenses} such as Neural
 Cleanse~\cite{wang2019nc}, ABS~\cite{liu2019abs}, Spectral
@@ -338,9 +340,9 @@ code, while LineVul~\cite{fu2022linevul} fine-tunes CodeBERT~\cite{feng2020codeb
 to achieve state-of-the-art line-level vulnerability localization.
 GraphCodeBERT~\cite{guo2021graphcodebert} further enriches code representations
 with data-flow information.
-ReVeal~\cite{chakraborty2022reveal} further demonstrates that combining graph
-neural networks with pre-trained embeddings improves detection on real-world
-datasets.
+Chakraborty \textit{et al.}~\cite{chakraborty2022reveal} further demonstrate
+(via their ReVeal model) that combining graph neural networks with pre-trained
+embeddings improves detection on real-world datasets.
 
 These methods target \emph{naturally occurring} vulnerabilities in human-written
 code and assume access to large labeled vulnerability corpora (e.g.,
@@ -353,7 +355,7 @@ on ordinary vulnerability prediction yet still fail when semantically plausible
 payloads appear only through previously unseen backdoor families. That
 distribution shift --- largely absent from standard vulnerability benchmarks ---
 is the core challenge our evaluation is designed to expose.
-We provide direct empirical evidence for this gap in \S\ref{sec:exp:bdvuln}
+We provide auxiliary evidence for this gap in \S\ref{sec:exp:bdvuln}
 and evaluate CodeBERT and GraphCodeBERT under the same LOAO protocol in
 \S\ref{sec:exp:pretrained}.
 \subsection{Mixture of Experts}
@@ -448,10 +450,10 @@ distinct groups, each targeting a different aspect of vulnerability behavior in
 LLM-generated Python code.
 
 \textbf{Group 1: Structural Features (\texttt{struc}, 9D).}
-Derived from the Abstract Syntax Tree (AST) of the code:
-\texttt{ast\_depth}, \texttt{dangerous\_api\_count}, \texttt{dynamic\_import\_count}, and \texttt{nested\_call\_depth}.
-Backdoored code tends to exhibit deeper AST structures and higher
-\texttt{dangerous\_api\_count} due to injected payload functions.
+Derived from the Abstract Syntax Tree (AST) of the code, including tree depth,
+dangerous API frequency, dynamic imports, and nested-call depth.
+Backdoored code tends to exhibit deeper AST structures and more dangerous API
+usage due to injected payload functions.
 This group contributes the highest MoE routing weight (avg.\ 0.175) in practice.
 
 \textbf{Group 2: Taint Analysis Features --- \texttt{sec\_taint} (5D, indices 9--13).}
@@ -530,9 +532,11 @@ where $N_e$ is the number of experts, $f_i$ is the fraction of tokens routed to
 expert $i$, and $P_i$ is the average softmax probability assigned to expert $i$.
 The total training loss is:
 \begin{equation}
-\mathcal{L} = \mathcal{L}_{\text{CE}} + \lambda \cdot \mathcal{L}_{\text{aux}},
-\quad \lambda = 0.01
+\mathcal{L} = \mathcal{L}_{\text{CE}} + \lambda \cdot \mathcal{L}_{\text{aux}}
 \end{equation}
+The architecture supports a load-balance auxiliary loss, but all reported LOAO
+runs set $\lambda{=}0$ because preliminary experiments showed no benefit from
+non-zero $\lambda$ under the current routing configuration.
 
 \subsubsection{Final Classification}
 
@@ -688,7 +692,7 @@ under attack shift.
 \sys{} matches XGBoost on \texttt{path\_traversal} (93.5\%) and slightly exceeds
 it on \texttt{code\_execution} and \texttt{crypto\_hash}, but it drops sharply on
 \texttt{request\_get} (31.9\%) and \texttt{socket\_socket} (1.4\%).
-This confirms that cross-attack evaluation should be read as a distribution of
+This reinforces that cross-attack evaluation should be read as a distribution of
 held-out attack outcomes, not as a single scalar leaderboard.
 
 \subsection{Pre-trained Code Models Under True LOAO}
@@ -738,20 +742,22 @@ The 29D features capture structural and statistical regularities (AST depth
 anomalies, entropy shifts, taint-flow patterns) that are more stable across
 attack families.
 
-\subsection{Backdoor Detection vs.\ Vulnerability Detection}
+\subsection{Backdoor Detection vs.\ Vulnerability Detection (Auxiliary)}
 \label{sec:exp:bdvuln}
 
 A reviewer might reasonably ask: \emph{is the detector merely identifying
 generic vulnerability patterns, or does it capture something specific to
 backdoor-induced code?}
-To answer this, we compare two learned detectors trained on the same 29D
-feature space and include Bandit as an external rule-based reference
+As an auxiliary proxy experiment on the original fixed train/val split
+(not the LOAO protocol), we compare two learned detectors trained on the same
+29D feature space and include Bandit as an external rule-based reference
 (Table~\ref{tab:bdvuln}).
 
 \begin{table}[t]
 \centering
-\caption{Controlled comparison: backdoor detection vs.\ vulnerability
-detection. ``Vuln labels'' = trained to predict whether code contains a known
+\caption{Auxiliary fixed-split proxy comparison: backdoor detection vs.\ vulnerability
+detection. This experiment uses the original train/val split, not the LOAO
+protocol. ``Vuln labels'' = trained to predict whether code contains a known
 vulnerability pattern regardless of trigger presence.}
 \label{tab:bdvuln}
 \small
@@ -767,15 +773,15 @@ Vuln detector (29D, vuln labels) & 0.693 & 0.971 \\
 \end{table}
 
 The vulnerability detector achieves near-perfect AUC (0.971) on its own task
-but only 0.693 when asked to distinguish backdoor samples from clean ones.
-The backdoor detector reaches 0.9997 AUC on backdoor identification.
-The 30.7-point gap (0.9997 vs.\ 0.693) demonstrates that backdoor samples
-carry signals beyond the vulnerability payload itself: the co-occurrence of a
+but only 0.693 when asked to distinguish backdoor samples from clean ones,
+whereas the backdoor detector reaches 0.9997 AUC on backdoor identification.
+These fixed-split proxy results are consistent with backdoor samples carrying
+signals beyond the vulnerability payload itself: the co-occurrence of a
 natural-language trigger with a structurally anomalous payload creates
 distributional signatures that a vulnerability-only detector does not learn.
 Bandit, a widely used static analysis tool, performs near chance (0.612),
-confirming that rule-based scanners are not a substitute for learned backdoor
-detectors.
+suggesting that rule-based scanners are not, by themselves, a substitute for
+learned backdoor detectors.
 
 \subsection{Error Analysis}
 \label{sec:exp:error}
@@ -957,7 +963,7 @@ about feature transfer rather than as a primary ranking result.
 
 \textbf{Statistical features (\texttt{stat}) are most discriminative}: removing
 the 4-dimensional entropy/perplexity group causes the largest AUC drop ($-7.49\%$),
-despite being the smallest group. This indicates that token-frequency deviation
+despite being the smallest group. This suggests that token-frequency deviation
 is the most transferable signal in this auxiliary holdout analysis.
 
 \textbf{Trigger patterns (\texttt{sec\_trigger}) exhibit over-specificity}:
@@ -1008,13 +1014,13 @@ in this paper.}
 \caption{Pareto-optimal operating points for different deployment scenarios.}
 \label{tab:pareto}
 \small
-\begin{tabular}{lcccc}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
 Scenario & Model & AUC & Recall & Latency \\
 \midrule
-\textbf{High-recall screening} & Logistic Regression & 0.851 & \textbf{0.716} & \textbf{0.13$\mu$s} \\
-\textbf{Interpretable neural option} & \sys{} ($N{=}1$) & 0.929 & 0.669 & 0.68$\mu$s \\
-\textbf{Best single-model AUC} & XGBoost & \textbf{0.950} & 0.707 & 10.69$\mu$s \\
+\textbf{Fast screening} & Logistic Regression & 0.851 & \textbf{0.716} & \textbf{0.13$\mu$s} \\
+\textbf{Interpretable MoE} & \sys{} ($N{=}1$) & 0.929 & 0.669 & 0.68$\mu$s \\
+\textbf{Best AUC} & XGBoost & \textbf{0.950} & 0.707 & 10.69$\mu$s \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1037,8 +1043,9 @@ current evidence:
 Our conclusions should be read with four constraints in mind.
 First, our main comparison uses true leave-one-attack-out evaluation for all
 primary models including pre-trained baselines, but several auxiliary results
-(MoE ablations, threshold studies) still come from the older fixed 7/4 holdout
-split.
+(MoE ablations, threshold studies, and the backdoor-vs-vulnerability proxy
+comparison) still come from older fixed-split evaluations rather than the main
+LOAO protocol.
 Second, all samples are derived from the CodeBreaker benchmark and are limited
 to Python code-generation backdoors; transfer to other languages, other prompt
 styles, or other poisoning pipelines remains untested.
@@ -1046,8 +1053,11 @@ Third, deduplicating the held-out backdoor set removes exact repeats and makes
 the evaluation more defensible, but other near-duplicate relationships may
 still remain.
 Fourth, some exploratory analyses in this paper, especially threshold and
-ensemble studies, are validation-limited; we therefore use them only to
-characterize failure modes and not as primary scientific claims.
+ensemble studies, are validation-limited, and the backdoor-vs-vulnerability
+comparison uses proxy vulnerability labels derived from known patterns rather
+than an independent vulnerability benchmark; we therefore use these analyses
+only to characterize failure modes and supporting evidence rather than as
+primary scientific claims.
 
 
 \section{Conclusion}
@@ -1069,12 +1079,13 @@ Four findings stand out:
   held-out attacks. Hand-crafted structural and statistical features capture
   more transferable regularities than pre-trained representations for this task.
 
-\item \textbf{The detector captures backdoor-specific signals, not generic
-  vulnerabilities.}
-  A controlled experiment shows that a vulnerability detector trained on the
-  same features achieves only AUC 0.693 on backdoor samples, compared to
-  0.9997 for the backdoor detector. This 30.7-point gap confirms that the
-  learned signal is specific to the trigger--payload coupling.
+\item \textbf{The detection signal is not reducible to generic vulnerability
+  patterns.}
+  An auxiliary fixed-split proxy experiment suggests that a vulnerability
+  detector trained on the same features achieves only AUC 0.693 on backdoor
+  samples, compared to 0.9997 for the backdoor detector. This 30.7-point gap is
+  consistent with the learned signal being specific to the trigger--payload
+  coupling.
 
 \item \textbf{In auxiliary fixed-split analysis, statistical features are the
   most transferable signal, while attack-specific heuristics overfit.}
@@ -1102,193 +1113,8 @@ The most important next steps are broader benchmarks beyond Python CodeBreaker,
 adaptive adversaries who are aware of the detector's feature space, and better
 calibration methods that remain stable under attack shift.
 %% ─────────────────────────────────────────────────────────────────────────────
-\begin{thebibliography}{99}
-
-\bibitem{schuster2021autocomplete}
-Roei Schuster, Congzheng Song, Eran Tromer, and Vitaly Shmatikov.
-\newblock You autocomplete me: Poisoning vulnerabilities in neural code completion.
-\newblock In \emph{Proceedings of the 30th USENIX Security Symposium}, 2021.
-
-\bibitem{ramakrishnan2022backdoors}
-Goutham Ramakrishnan and Aws Albarghouthi.
-\newblock Backdoors in neural models of source code.
-\newblock In \emph{Proceedings of the International Conference on Pattern Recognition (ICPR)}, 2022.
-
-\bibitem{codebreaker2023}
-Shenao Yan, Shen Wang, Yue Duan, Hanbin Hong, Kiho Lee, Doowon Kim, and Yuan Hong.
-\newblock An LLM-Assisted Easy-to-Trigger Backdoor Attack on Code Completion Models: Injecting Disguised Vulnerabilities against Strong Detection.
-\newblock In \emph{Proceedings of the 33rd USENIX Security Symposium (USENIX Security '24)}, 2024.
-
-\bibitem{chen2023killbadcode}
-Weisong Sun, Yuchen Chen, Mengzhe Yuan, Chunrong Fang, Zhenpeng Chen, Chong Wang, Yang Liu, Baowen Xu, and Zhenyu Chen.
-\newblock Show me your code! Kill code poisoning: A lightweight method based on code naturalness.
-\newblock In \emph{Proceedings of the 47th International Conference on Software Engineering (ICSE)}, 2025.
-
-\bibitem{gao2019strip}
-Yansong Gao, Change Xu, Derui Wang, Shiping Chen, Damith~C. Ranasinghe,
-and Surya Nepal.
-\newblock STRIP: A defence against trojan attacks on deep neural networks.
-\newblock In \emph{ACSAC}, 2019.
-
-\bibitem{gu2019badnets}
-Tianyu Gu, Brendan Dolan-Gavitt, and Siddharth Garg.
-\newblock BadNets: Identifying vulnerabilities in the machine learning model supply chain.
-\newblock \emph{arXiv preprint arXiv:1708.06733}, 2019.
-
-\bibitem{liu2018trojaning}
-Yingqi Liu, Shiqing Ma, Yousra Aafer, Wen-Chuan Lee, Juan Zhai,
-Weihang Wang, and Xiangyu Zhang.
-\newblock Trojaning attack on neural networks.
-\newblock In \emph{Proceedings of the 25th Network and Distributed Systems Security Symposium (NDSS)}, 2018.
-
-\bibitem{wang2019nc}
-Bolun Wang, Yuanshun Yao, Shawn Shan, Huiying Li, Bimal Viswanath,
-Haitao Zheng, and Ben~Y. Zhao.
-\newblock Neural cleanse: Identifying and mitigating backdoor attacks in neural networks.
-\newblock In \emph{IEEE S\&P}, 2019.
-
-\bibitem{liu2019abs}
-Yingqi Liu, Wen-Chuan Lee, Guanhong Tao, Shiqing Ma, Yousra Aafer,
-and Xiangyu Zhang.
-\newblock ABS: Scanning neural networks for back-doors by artificial brain stimulation.
-\newblock In \emph{ACM CCS}, 2019.
-
-\bibitem{jacobs1991moe}
-Robert~A. Jacobs, Michael~I. Jordan, Steven~J. Nowlan, and Geoffrey~E. Hinton.
-\newblock Adaptive mixtures of local experts.
-\newblock \emph{Neural Computation}, 3(1):79--87, 1991.
-
-\bibitem{shazeer2017moe}
-Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le,
-Geoffrey Hinton, and Jeff Dean.
-\newblock Outrageously large neural networks: The sparsely-gated mixture-of-experts layer.
-\newblock In \emph{ICLR}, 2017.
-
-\bibitem{fedus2022switch}
-William Fedus, Barret Zoph, and Noam Shazeer.
-\newblock Switch transformers: Scaling to trillion parameter models with simple
-and efficient sparsity.
-\newblock \emph{Journal of Machine Learning Research}, 23(120):1--39, 2022.
-
-
-
-\bibitem{arik2021tabnet}
-Sercan~\"{O}. Arik and Tomas Pfister.
-\newblock TabNet: Attentive interpretable tabular learning.
-\newblock In \emph{AAAI}, 2021.
-
-\bibitem{breiman1996bagging}
-Leo Breiman.
-\newblock Bagging predictors.
-\newblock \emph{Machine Learning}, 24(2):123--140, 1996.
-
-\bibitem{dietterich2000ensemble}
-Thomas~G. Dietterich.
-\newblock Ensemble methods in machine learning.
-\newblock In \emph{International Workshop on Multiple Classifier Systems}, 2000.
-
-\bibitem{wolpert1992stacking}
-David~H. Wolpert.
-\newblock Stacked generalization.
-\newblock \emph{Neural Networks}, 5(2):241--259, 1992.
-
-\bibitem{gomes2017survey}
-Heitor~Murilo Gomes, Jean~Paul Barddal, Fabricio Enembreck, and Albert Bifet.
-\newblock A survey on ensemble learning for data stream classification.
-\newblock \emph{ACM Computing Surveys}, 50(2):23, 2017.
-
-\bibitem{li2018vuldeepecker}
-Zhen Li, Deqing Zou, Shouhuai Xu, Xinyu Ou, Hai Jin, Sujuan Wang, Zhijun Deng, and Yuyi Zhong.
-\newblock VulDeePecker: A deep learning-based system for vulnerability detection.
-\newblock In \emph{Proceedings of the 25th Annual Network and Distributed System Security Symposium (NDSS)}, 2018.
-
-\bibitem{li2021sysevr}
-Zhen Li, Deqing Zou, Shouhuai Xu, Hai Jin, Yawei Zhu, and Zhaoxuan Chen.
-\newblock SySeVR: A framework for using deep learning to detect software vulnerabilities.
-\newblock \emph{IEEE Transactions on Dependable and Secure Computing}, 19(4):2244--2258, 2021.
-
-\bibitem{zhou2019devign}
-Yaqin Zhou, Shangqing Liu, Jingkai Siow, Xiaoning Du, and Yang Liu.
-\newblock Devign: Effective vulnerability identification by learning comprehensive program semantics via graph neural networks.
-\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2019.
-
-\bibitem{fu2022linevul}
-Michael Fu, Chakkrit Tantithamthavorn, Trung Le, Van Nguyen, and Dinh Phung.
-\newblock LineVul: A transformer-based line-level vulnerability prediction.
-\newblock In \emph{Proceedings of the 19th International Conference on Mining Software Repositories (MSR)}, 2022.
-
-\bibitem{feng2020codebert}
-Zhangyin Feng, Daya Guo, Duyu Tang, Nan Duan, Xiaocheng Feng, Ming Gong, Linjun Shou, Bing Qin, Ting Liu, Daxin Jiang, and Ming Zhou.
-\newblock CodeBERT: A pre-trained model for programming and natural languages.
-\newblock In \emph{Findings of the Association for Computational Linguistics: EMNLP 2020}, 2020.
-
-\bibitem{chakraborty2022reveal}
-Saikat Chakraborty, Rahul Krishna, Yangruibo Ding, and Baishakhi Ray.
-\newblock Deep learning based vulnerability detection: Are we there yet?
-\newblock \emph{IEEE Transactions on Software Engineering}, 48(9):3280--3298, 2022.
-
-\bibitem{fan2020bigvul}
-Jiahao Fan, Yi Li, Shaohua Wang, and Tien~N. Nguyen.
-\newblock A C/C++ code vulnerability dataset with code changes and CVE summaries.
-\newblock In \emph{Proceedings of the 17th International Conference on Mining Software Repositories (MSR)}, 2020.
-
-\bibitem{li2022backdoor_survey}
-Yiming Li, Yong Jiang, Zhifeng Li, and Shu-Tao Xia.
-\newblock Backdoor learning: A survey.
-\newblock \emph{IEEE Transactions on Neural Networks and Learning Systems}, 35(1):5--22, 2024.
-
-\bibitem{aghakhani2024trojanpuzzle}
-Hojjat Aghakhani, Wei Meng, Yangsibo Huang, Jinyuan Jia, Michael Backes, and Amir Houmansadr.
-\newblock TROJANPUZZLE: Covertly poisoning code-suggestion models.
-\newblock In \emph{IEEE Symposium on Security and Privacy (S\&P)}, 2024.
-
-\bibitem{boucher2023trojansource}
-Nicholas Boucher and Ross Anderson.
-\newblock Trojan source: Invisible vulnerabilities.
-\newblock In \emph{IEEE Symposium on Security and Privacy (S\&P)}, 2023.
-
-\bibitem{perry2023insecure}
-Neil Perry, Megha Srivastava, Deepak Kumar, and Dan Boneh.
-\newblock Do users write more insecure code with AI assistants?
-\newblock In \emph{IEEE Symposium on Security and Privacy (S\&P)}, 2023.
-
-\bibitem{pearce2022copilot}
-Hammond Pearce, Baleegh Ahmad, Benjamin Tan, Brendan Dolan-Gavitt, and Ramesh Karri.
-\newblock Asleep at the keyboard? Assessing the security of GitHub Copilot's code contributions.
-\newblock In \emph{IEEE Symposium on Security and Privacy (S\&P)}, 2022.
-
-\bibitem{tran2018spectral}
-Brandon Tran, Jerry Li, and Aleksander Madry.
-\newblock Spectral signatures in backdoor attacks.
-\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2018.
-
-\bibitem{chen2019activation}
-Bryant Chen, Wilka Carvalho, Nathalie Baracaldo, Heiko Ludwig, Benjamin Edwards, Taesung Lee, Ian Molloy, and Biplav Srivastava.
-\newblock Detecting backdoor attacks on deep neural networks by activation clustering.
-\newblock In \emph{AAAI Workshop on Artificial Intelligence Safety (SafeAI)}, 2019.
-
-\bibitem{qi2021onion}
-Fanchao Qi, Yangyi Chen, Mukai Li, Yuan Yao, Zhiyuan Liu, and Maosong Sun.
-\newblock ONION: A simple and effective defense against textual backdoor attacks.
-\newblock In \emph{Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP)}, 2021.
-
-\bibitem{guo2021graphcodebert}
-Daya Guo, Shuo Ren, Shuai Lu, Zhangyin Feng, Duyu Tang, Shujie Liu, Long Zhou, Nan Duan, Alexey Svyatkovskiy, Shengyu Fu, Michele Tufano, Shao~Kun Deng, Colin Clement, Dawn Drain, Neel Sundaresan, Jian Yin, Daxin Jiang, and Ming Zhou.
-\newblock GraphCodeBERT: Pre-training code representations with data flow.
-\newblock In \emph{International Conference on Learning Representations (ICLR)}, 2021.
-
-\bibitem{roziere2023codellama}
-Baptiste Roziere, Jonas Gehring, Fabian Gloeckle, Sten Sootla, Itai Gat, Xiaoqing~Ellen Tan, Yossi Adi, Jingyu Liu, Romain Sauvestre, Tal Remez, J\'{e}r\'{e}my Rapin, Artyom Kozhevnikov, Ivan Evtimov, Joanna Bitton, Manish Bhatt, Cristian~Canton Ferrer, Aaron Grattafiori, Wenhan Xiong, Alexandre D\'{e}fossez, Jade Copet, Faisal Azhar, Hugo Touvron, Louis Martin, Nicolas Usunier, Thomas Scialom, and Gabriel Synnaeve.
-\newblock Code Llama: Open foundation models for code.
-\newblock \emph{arXiv preprint arXiv:2308.12950}, 2023.
-
-\bibitem{li2023starcoder}
-Raymond Li, Loubna~Ben Allal, Yangtian Zi, Niklas Muennighoff, Denis Kocetkov, Chenghao Mou, Marc Marone, Christopher Akiki, Jia Li, Jenny Chim, Qian Liu, Evgenii Zheltonozhskii, Terry~Yue Zhuo, Thomas Wang, Olivier Dehaene, Mishig Davaadorj, Joel Lamy-Poirier, Jo\~{a}o Monteiro, Oleh Shliazhko, Nicolas Gontier, Nicholas Meade, Armel Zebaze, Ming-Ho Yee, Logesh~Kumar Umapathi, Jian Zhu, Benjamin Lipkin, Muhtasham Oblokulov, Zhiruo Wang, Rudra Murthy, Jason Stillerman, Siva~Sankalp Patel, Dmitry Abulkhanov, Marco Zocca, Manan Dey, Zhihan Zhang, Nour Fahber, Urvashi Bhattacharyya, Wenhao Yu, Swayam Singh, Sasha Luccioni, Paulo Villegas, Maxim Kunakov, Fedor Zhdanov, Manuel Romero, Tony Lee, Nadav Timor, Jennifer Ding, Claire Schlesinger, Hailey Schoelkopf, Jan Ebert, Tri Dao, Mayank Mishra, Alex Gu, Jennifer Robinson, Carolyn~Jane Anderson, Brendan Dolan-Gavitt, Danish Contractor, Siva Reddy, Daniel Fried, Dzmitry Bahdanau, Yacine Jernite, Carlos~Mu\~{n}oz Ferrandis, Sean Hughes, Thomas Wolf, Arjun Guha, Leandro von Werra, and Harm de Vries.
-\newblock StarCoder: May the source be with you!
-\newblock \emph{Transactions on Machine Learning Research (TMLR)}, 2023.
-
-
-\end{thebibliography}
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
 
 \appendix
 
@@ -1316,7 +1142,7 @@ deduplication of held-out backdoor samples, and plotting/reporting scripts.
 To preserve double-blind review, the artifact should be hosted at an anonymous,
 archival URL and listed both here and in HotCRP before submission:
 \begin{center}
-\texttt{[ANONYMIZED-ARTIFACT-URL]}
+\url{https://anonymous.4open.science/r/submission_artifact-46CD/}
 \end{center}
 
 % If generative AI tools were used in a substantive way, CCS 2026 requires an
@@ -1327,7 +1153,7 @@ preparation of this paper. Specifically:
 \begin{itemize}
 \item \textbf{Experiment code.} Claude assisted in writing the CodeBERT/GraphCodeBERT
   baseline evaluation script (\texttt{codebert\_baseline.py}) and the
-  backdoor-vs-vulnerability controlled comparison script. All experimental
+  auxiliary backdoor-vs-vulnerability proxy comparison script. All experimental
   protocols, data splits, and evaluation logic were reviewed and validated by
   the authors against the existing \texttt{true\_loao\_baselines.py} reference
   implementation.

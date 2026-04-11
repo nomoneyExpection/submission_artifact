@@ -1,254 +1,216 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-后门检测 vs 漏洞检测对照实验
+"""Auxiliary fixed-split backdoor-vs-vulnerability comparison.
 
-目的：证明我们的方法检测的是"后门"而非仅仅是"漏洞"
-
-实验设计：
-1. 对照组1：普通漏洞检测工具（Bandit）
-2. 对照组2：训练漏洞检测器（标签=是否包含漏洞，不管trigger）
-3. 实验组：我们的后门检测器（标签=是否为后门样本）
-
-关键问题：后门样本的特殊性在哪里？
+This script reproduces the Table 3 reference experiment from the paper. Unlike
+the primary evaluations, it uses the original detector train/validation split
+and should be interpreted only as an auxiliary comparison.
 """
 
 import json
-import sys
-import subprocess
 import re
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-from typing import Dict, List, Tuple
-import numpy as np
-from sklearn.metrics import roc_auc_score, precision_recall_fscore_support
-from sklearn.ensemble import RandomForestClassifier
-from tqdm import tqdm
-import pickle
+from typing import Dict, List
 
-# 添加项目路径
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
+from tqdm import tqdm
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from pipeline import FeatureFusionPipeline
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATA_DIR = BASE_DIR / "data"
+RESULTS_DIR = BASE_DIR / "evaluation_results"
+SEED = 42
+
+
+def load_samples(path: Path) -> List[Dict]:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return payload.get("samples", payload) if isinstance(payload, dict) else payload
 
 
 def run_bandit_detection(code_samples: List[str]) -> List[float]:
-    """
-    使用Bandit工具检测漏洞
-    返回每个样本的风险评分（0-1）
-    """
+    """Return one normalized Bandit severity score per sample."""
     scores = []
+    severity_map = {"HIGH": 1.0, "MEDIUM": 0.6, "LOW": 0.3}
 
-    for code in tqdm(code_samples, desc="Bandit扫描"):
-        tmp_file = Path("/tmp/temp_code.py")
-        tmp_file.write_text(code)
-
+    for code in tqdm(code_samples, desc="Bandit scan"):
+        tmp_path = None
         try:
-            # 运行Bandit
+            with tempfile.NamedTemporaryFile(
+                "w", suffix=".py", delete=False, encoding="utf-8"
+            ) as handle:
+                handle.write(code)
+                tmp_path = Path(handle.name)
+
             result = subprocess.run(
-                ["bandit", "-f", "json", str(tmp_file)],
+                ["bandit", "-f", "json", str(tmp_path)],
                 capture_output=True,
                 text=True,
-                timeout=2  # 减少超时时间
+                timeout=2,
+                check=False,
             )
 
-            # 解析结果
-            if result.stdout:
-                data = json.loads(result.stdout)
-                issues = data.get("results", [])
-
-                # 计算风险评分
-                severity_map = {"HIGH": 1.0, "MEDIUM": 0.6, "LOW": 0.3}
-                score = sum(severity_map.get(issue.get("issue_severity", "LOW"), 0.3)
-                           for issue in issues)
-                scores.append(min(score, 1.0))
-            else:
+            if not result.stdout:
                 scores.append(0.0)
+                continue
 
+            data = json.loads(result.stdout)
+            issues = data.get("results", [])
+            score = sum(
+                severity_map.get(issue.get("issue_severity", "LOW"), 0.3)
+                for issue in issues
+            )
+            scores.append(min(score, 1.0))
         except Exception:
             scores.append(0.0)
+        finally:
+            if tmp_path and tmp_path.exists():
+                tmp_path.unlink()
 
     return scores
 
-    return scores
 
-
-def extract_vulnerability_labels(data: List[Dict]) -> List[int]:
-    """
-    提取漏洞标签（不管是否后门触发）
-
-    规则：如果代码包含已知漏洞模式，标记为1
-    """
+def extract_vulnerability_labels(samples: List[Dict]) -> List[int]:
+    """Infer coarse vulnerability labels from simple code patterns."""
     vuln_patterns = [
-        r'pickle\.loads?',
-        r'yaml\.load\(',
-        r'eval\(',
-        r'exec\(',
-        r'hashlib\.md5',
-        r'hashlib\.sha1',
-        r'socket\.socket',
-        r'subprocess\.',
-        r'os\.system',
+        r"pickle\.loads?",
+        r"yaml\.load\(",
+        r"eval\(",
+        r"exec\(",
+        r"hashlib\.md5",
+        r"hashlib\.sha1",
+        r"socket\.socket",
+        r"subprocess\.",
+        r"os\.system",
     ]
 
-    import re
     labels = []
-
-    for sample in data:
-        code = sample.get('code', '')
+    for sample in samples:
+        code = sample.get("code", "")
         has_vuln = any(re.search(pattern, code) for pattern in vuln_patterns)
-        labels.append(1 if has_vuln else 0)
-
+        labels.append(int(has_vuln))
     return labels
 
 
-def train_vulnerability_detector(train_data: List[Dict]) -> RandomForestClassifier:
-    """训练漏洞检测器（标签=是否包含漏洞）"""
+def extract_feature_matrix(samples: List[Dict]) -> np.ndarray:
     pipeline = FeatureFusionPipeline()
-    
-    X_train = []
-    y_train = extract_vulnerability_labels(train_data)
-    
-    for sample in train_data:
-        features = pipeline.extract(sample['code'])
-        X_train.append(features)
-    
-    X_train = np.array(X_train)
-    
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf.fit(X_train, y_train)
-    
+    return np.asarray([pipeline.extract(sample["code"]) for sample in samples])
+
+
+def train_vulnerability_detector(train_data: List[Dict]) -> RandomForestClassifier:
+    """Train a detector on coarse vulnerability labels."""
+    features = extract_feature_matrix(train_data)
+    labels = np.asarray(extract_vulnerability_labels(train_data))
+    clf = RandomForestClassifier(n_estimators=100, random_state=SEED)
+    clf.fit(features, labels)
     return clf
 
 
 def train_backdoor_detector(train_data: List[Dict]) -> RandomForestClassifier:
-    """训练后门检测器（标签=是否为后门样本）"""
-    pipeline = FeatureFusionPipeline()
-    
-    X_train = []
-    y_train = [sample['label'] for sample in train_data]
-    
-    for sample in train_data:
-        features = pipeline.extract(sample['code'])
-        X_train.append(features)
-    
-    X_train = np.array(X_train)
-    
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf.fit(X_train, y_train)
-    
+    """Train a detector on backdoor labels from the dataset."""
+    features = extract_feature_matrix(train_data)
+    labels = np.asarray([int(sample["label"]) for sample in train_data])
+    clf = RandomForestClassifier(n_estimators=100, random_state=SEED)
+    clf.fit(features, labels)
     return clf
 
 
-def evaluate_detector(y_true: List[int], y_pred: List[float]) -> Dict:
-    """评估检测器性能"""
-    y_pred_binary = [1 if p > 0.5 else 0 for p in y_pred]
-    
-    auc = roc_auc_score(y_true, y_pred)
+def evaluate_detector(y_true: List[int], y_score: List[float]) -> Dict[str, float]:
+    """Compute AUC, precision, recall, and F1 at threshold 0.5."""
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score)
+    y_pred = (y_score > 0.5).astype(int)
+
+    auc = roc_auc_score(y_true, y_score)
     precision, recall, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred_binary, average='binary'
+        y_true, y_pred, average="binary", zero_division=0
     )
-    
     return {
-        'auc': auc,
-        'precision': precision,
-        'recall': recall,
-        'f1': f1
+        "auc": float(auc),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
     }
 
 
-
-def main():
-    """主实验流程"""
+def main() -> None:
     print("=" * 60)
-    print("后门检测 vs 漏洞检测对照实验")
+    print("Auxiliary fixed-split backdoor-vs-vulnerability comparison")
     print("=" * 60)
-    
-    # 加载数据
-    data_dir = Path(__file__).parent.parent.parent / "data"
-    train_file = data_dir / "detector_train.json"
-    val_file = data_dir / "detector_val.json"
-    
-    print(f"\n加载数据: {train_file}")
-    with open(train_file) as f:
-        train_json = json.load(f)
-        train_data = train_json['samples'] if 'samples' in train_json else train_json
 
-    with open(val_file) as f:
-        val_json = json.load(f)
-        val_data = val_json['samples'] if 'samples' in val_json else val_json
-    
-    print(f"训练集: {len(train_data)} 样本")
-    print(f"验证集: {len(val_data)} 样本")
-    
-    # 提取测试集标签
-    y_test_backdoor = [s['label'] for s in val_data]
+    train_file = DATA_DIR / "detector_train.json"
+    val_file = DATA_DIR / "detector_val.json"
+    print(f"\nLoading training data from: {train_file}")
+
+    train_data = load_samples(train_file)
+    val_data = load_samples(val_file)
+
+    print(f"Training samples:   {len(train_data)}")
+    print(f"Validation samples: {len(val_data)}")
+
+    y_test_backdoor = [int(sample["label"]) for sample in val_data]
     y_test_vuln = extract_vulnerability_labels(val_data)
-    test_codes = [s['code'] for s in val_data]
-    
-    results = {}
-    
-    # 实验1: Bandit工具
+    test_codes = [sample["code"] for sample in val_data]
+
+    results: Dict[str, Dict[str, float]] = {}
+
     print("\n" + "=" * 60)
-    print("实验1: Bandit漏洞检测工具")
+    print("Experiment 1: Bandit reference")
     print("=" * 60)
     bandit_scores = run_bandit_detection(test_codes)
+    results["bandit_vs_backdoor"] = evaluate_detector(y_test_backdoor, bandit_scores)
+    results["bandit_vs_vuln"] = evaluate_detector(y_test_vuln, bandit_scores)
+    print(f"Bandit vs backdoor:      AUC={results['bandit_vs_backdoor']['auc']:.4f}")
+    print(f"Bandit vs vulnerability: AUC={results['bandit_vs_vuln']['auc']:.4f}")
 
-    results['bandit_vs_backdoor'] = evaluate_detector(y_test_backdoor, bandit_scores)
-    results['bandit_vs_vuln'] = evaluate_detector(y_test_vuln, bandit_scores)
-
-    print(f"Bandit检测后门: AUC={results['bandit_vs_backdoor']['auc']:.4f}")
-    print(f"Bandit检测漏洞: AUC={results['bandit_vs_vuln']['auc']:.4f}")
-    
-    # 实验2: 漏洞检测器
     print("\n" + "=" * 60)
-    print("实验2: 训练漏洞检测器")
+    print("Experiment 2: Learned vulnerability detector")
     print("=" * 60)
     vuln_detector = train_vulnerability_detector(train_data)
-    
-    pipeline = FeatureFusionPipeline()
-    X_test = np.array([pipeline.extract(s['code']) for s in val_data])
-    vuln_pred = vuln_detector.predict_proba(X_test)[:, 1]
-    
-    results['vuln_detector_vs_backdoor'] = evaluate_detector(y_test_backdoor, vuln_pred)
-    results['vuln_detector_vs_vuln'] = evaluate_detector(y_test_vuln, vuln_pred)
-    
-    print(f"漏洞检测器检测后门: AUC={results['vuln_detector_vs_backdoor']['auc']:.4f}")
-    print(f"漏洞检测器检测漏洞: AUC={results['vuln_detector_vs_vuln']['auc']:.4f}")
-    
-    # 实验3: 后门检测器
+    x_test = extract_feature_matrix(val_data)
+    vuln_scores = vuln_detector.predict_proba(x_test)[:, 1]
+    results["vuln_detector_vs_backdoor"] = evaluate_detector(y_test_backdoor, vuln_scores)
+    results["vuln_detector_vs_vuln"] = evaluate_detector(y_test_vuln, vuln_scores)
+    print(
+        f"Vulnerability detector vs backdoor:      "
+        f"AUC={results['vuln_detector_vs_backdoor']['auc']:.4f}"
+    )
+    print(
+        f"Vulnerability detector vs vulnerability: "
+        f"AUC={results['vuln_detector_vs_vuln']['auc']:.4f}"
+    )
+
     print("\n" + "=" * 60)
-    print("实验3: 训练后门检测器")
+    print("Experiment 3: Learned backdoor detector")
     print("=" * 60)
     backdoor_detector = train_backdoor_detector(train_data)
-    backdoor_pred = backdoor_detector.predict_proba(X_test)[:, 1]
-    
-    results['backdoor_detector_vs_backdoor'] = evaluate_detector(y_test_backdoor, backdoor_pred)
-    results['backdoor_detector_vs_vuln'] = evaluate_detector(y_test_vuln, backdoor_pred)
-    
-    print(f"后门检测器检测后门: AUC={results['backdoor_detector_vs_backdoor']['auc']:.4f}")
-    print(f"后门检测器检测漏洞: AUC={results['backdoor_detector_vs_vuln']['auc']:.4f}")
-    
-    # 保存结果
-    output_file = Path(__file__).parent.parent.parent / "evaluation_results" / "backdoor_vs_vuln_results.json"
-    output_file.parent.mkdir(exist_ok=True)
-    
-    with open(output_file, 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    print(f"\n结果已保存: {output_file}")
-    
-    # 打印总结
-    print("\n" + "=" * 60)
-    print("实验总结")
-    print("=" * 60)
-    print("\n检测后门样本的AUC:")
-    print(f"  Bandit工具:     {results['bandit_vs_backdoor']['auc']:.4f}")
-    print(f"  漏洞检测器:     {results['vuln_detector_vs_backdoor']['auc']:.4f}")
-    print(f"  后门检测器:     {results['backdoor_detector_vs_backdoor']['auc']:.4f}")
+    backdoor_scores = backdoor_detector.predict_proba(x_test)[:, 1]
+    results["backdoor_detector_vs_backdoor"] = evaluate_detector(
+        y_test_backdoor, backdoor_scores
+    )
+    results["backdoor_detector_vs_vuln"] = evaluate_detector(y_test_vuln, backdoor_scores)
+    print(
+        f"Backdoor detector vs backdoor:      "
+        f"AUC={results['backdoor_detector_vs_backdoor']['auc']:.4f}"
+    )
+    print(
+        f"Backdoor detector vs vulnerability: "
+        f"AUC={results['backdoor_detector_vs_vuln']['auc']:.4f}"
+    )
 
-    print("\n检测漏洞的AUC:")
-    print(f"  Bandit工具:     {results['bandit_vs_vuln']['auc']:.4f}")
-    print(f"  漏洞检测器:     {results['vuln_detector_vs_vuln']['auc']:.4f}")
-    print(f"  后门检测器:     {results['backdoor_detector_vs_vuln']['auc']:.4f}")
+    RESULTS_DIR.mkdir(exist_ok=True)
+    output_file = RESULTS_DIR / "backdoor_vs_vuln_results.json"
+    with output_file.open("w", encoding="utf-8") as handle:
+        json.dump(results, handle, indent=2)
+
+    print(f"\nSaved results to: {output_file}")
 
 
 if __name__ == "__main__":
